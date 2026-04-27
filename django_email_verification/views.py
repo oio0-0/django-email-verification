@@ -3,7 +3,7 @@ from django.core.handlers.wsgi import WSGIRequest
 from django.shortcuts import render
 from django.contrib.auth import login
 
-from .confirm import verify_email_view, verify_email, verify_password_view, verify_password, verify_email_update
+from .confirm import verify_email_update_view, verify_email_view, verify_email, verify_password_view, verify_password, verify_email_update
 from .errors import NotAllFieldCompiled
 
 @verify_email_view
