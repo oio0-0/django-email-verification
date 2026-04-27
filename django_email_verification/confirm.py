@@ -137,7 +137,7 @@ def verify_password(token, password):
     return False, None
 
 def verify_email_update(token):
-    valid, user, new_email = default_token_generator.check_token_update_email(token, kind='MAIL')
+    valid, user, new_email = default_token_generator.check_token_update_email(token, kind='MAIL_UPDATE')
     
     if valid:
         callback = _get_validated_field('EMAIL_MAIL_CALLBACK', default_type=Callable)
