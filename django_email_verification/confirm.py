@@ -15,7 +15,6 @@ from .errors import InvalidUserModel, NotAllFieldCompiled
 from .token_utils import default_token_generator
 
 logger = logging.getLogger('django_email_verification')
-DJANGO_EMAIL_VERIFICATION_URL_ROUTE_ERROR = 'ERROR: no path found url.py'
 DJANGO_EMAIL_VERIFICATION_MORE_VIEWS_ERROR = 'ERROR: more than one verify view found'
 DJANGO_EMAIL_VERIFICATION_MALFORMED_URL = 'WARNING: the URL seems to be malformed'
 
@@ -23,18 +22,18 @@ DJANGO_EMAIL_VERIFICATION_MALFORMED_URL = 'WARNING: the URL seems to be malforme
 def send_email(user, thread=True, expiry=None, context=None):
     send_inner(user, thread, expiry, 'MAIL', context)
 
-
 def send_password(user, thread=True, expiry=None, context=None):
     send_inner(user, thread, expiry, 'PASSWORD', context)
 
+def send_email_change(user, thread=True, expiry=None, context=None, **kwargs):
+    send_inner(user, thread, expiry, 'MAIL_UPDATE', context, **kwargs)
 
-def send_inner(user, thread, expiry, kind, context=None):
+def send_inner(user, thread, expiry, kind, context=None, **kwargs):
     try:
-        user.save()
 
         exp = expiry if expiry is not None else _get_validated_field(f'EMAIL_{kind}_TOKEN_LIFE',
                                                                      default_type=int) + default_token_generator.now()
-        token, expiry = default_token_generator.make_token(user, exp, kind=kind)
+        token, expiry = default_token_generator.make_token(user, exp, kind=kind, **kwargs)
 
         sender = _get_validated_field('EMAIL_FROM_ADDRESS')
         domain = _get_validated_field('EMAIL_PAGE_DOMAIN', default='', use_default=True)
@@ -73,16 +72,12 @@ def send_inner_thread(user, kind, token, expiry, sender, domain, subject, mail_p
     d = [v[0][0] for k, v in get_resolver(None).reverse_dict.items() if has_decorator(k)]
     d = [a[0][:a[0].index('%')] for a in d if len(a[1])]
 
-    if len(d) == 0:
-        logger.error(DJANGO_EMAIL_VERIFICATION_URL_ROUTE_ERROR)
-        return
-
     if len(d) > 1:
         logger.error(f'{DJANGO_EMAIL_VERIFICATION_MORE_VIEWS_ERROR}: {d}')
         return
 
     if len(d) >= 1:
-        context['link'] = domain + d[0] + token
+        context['link'] = domain + d[0] + token #сюда нужно запихать свою новую ссылку
         if not validators.url(context['link']):
             logger.warning(f'{DJANGO_EMAIL_VERIFICATION_MALFORMED_URL} - {context["link"]}')
 
@@ -115,19 +110,19 @@ def _get_validated_field(field, default=None, use_default=False, default_type=No
             return default
         raise NotAllFieldCompiled(f'Field {field} missing or invalid')
 
-
 def verify_email(token):
     valid, user = default_token_generator.check_token(token, kind='MAIL')
+    
     if valid:
         callback = _get_validated_field('EMAIL_MAIL_CALLBACK', default_type=Callable)
         if hasattr(user, callback.__name__):
             getattr(user, callback.__name__)()
         else:
             callback(user)
-        user.save()
-        return valid, user
-    return False, None
 
+        return True, user
+    
+    return False, None
 
 def verify_password(token, password):
     valid, user = default_token_generator.check_token(token, kind='PASSWORD')
@@ -140,6 +135,20 @@ def verify_password(token, password):
         user.save()
         return valid, user
     return False, None
+
+def verify_email_update(token):
+    valid, user, new_email = default_token_generator.check_token_update_email(token, kind='MAIL')
+    
+    if valid:
+        callback = _get_validated_field('EMAIL_MAIL_CALLBACK', default_type=Callable) #поменять мб
+        if hasattr(user, callback.__name__):
+            getattr(user, callback.__name__)()
+        else:
+            callback(user)
+
+        return True, user, new_email
+    
+    return False, None, None
 
 
 @deprecation.deprecated(deprecated_in='0.3.0', details='use either verify_email() or verify_password()')
@@ -159,6 +168,15 @@ def verify_email_view(func):
 
 def verify_password_view(func):
     func.django_email_verification_password_view_id = True
+
+    @functools.wraps(func)
+    def verify_function_wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+
+    return verify_function_wrapper
+
+def verify_email_update_view(func):
+    func.django_email_verification_mail_update_view_id = True
 
     @functools.wraps(func)
     def verify_function_wrapper(*args, **kwargs):
