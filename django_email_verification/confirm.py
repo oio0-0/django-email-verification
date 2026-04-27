@@ -77,7 +77,7 @@ def send_inner_thread(user, kind, token, expiry, sender, domain, subject, mail_p
         return
 
     if len(d) >= 1:
-        context['link'] = domain + d[0] + token #сюда нужно запихать свою новую ссылку
+        context['link'] = domain + d[0] + token
         if not validators.url(context['link']):
             logger.warning(f'{DJANGO_EMAIL_VERIFICATION_MALFORMED_URL} - {context["link"]}')
 
@@ -140,7 +140,7 @@ def verify_email_update(token):
     valid, user, new_email = default_token_generator.check_token_update_email(token, kind='MAIL')
     
     if valid:
-        callback = _get_validated_field('EMAIL_MAIL_CALLBACK', default_type=Callable) #поменять мб
+        callback = _get_validated_field('EMAIL_MAIL_CALLBACK', default_type=Callable)
         if hasattr(user, callback.__name__):
             getattr(user, callback.__name__)()
         else:
